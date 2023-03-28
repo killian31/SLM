@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
+from tqdm import tqdm
 
 from model import GPT, GPTConfig
 
@@ -27,8 +28,8 @@ wandb_project = "owt"
 wandb_run_name = "gpt2"  # 'run' + str(time.time())
 # data
 dataset = "family"
-gradient_accumulation_steps = 5  # used to simulate larger batch sizes
-batch_size = 12  # if gradient_accumulation_steps > 1, this is the micro-batch size
+gradient_accumulation_steps = 1  # used to simulate larger batch sizes
+batch_size = 4  # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 1024
 # model
 n_layer = 12
@@ -55,7 +56,7 @@ device = (
     "cpu"  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 )
 dtype = "bfloat16"  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = True  # use PyTorch 2.0 to compile the model to be faster
+compile = False  # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [
     k
@@ -228,7 +229,7 @@ def estimate_loss():
     model.eval()
     for split in ["train", "val"]:
         losses = torch.zeros(eval_iters)
-        for k in range(eval_iters):
+        for k in tqdm(range(eval_iters)):
             X, Y = get_batch(split)
             with ctx:
                 logits, loss = model(X, Y)
@@ -305,7 +306,7 @@ while True:
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
-    for micro_step in range(gradient_accumulation_steps):
+    for micro_step in tqdm(range(gradient_accumulation_steps)):
         if ddp:
             # in DDP training we only need to sync gradients at the last micro step.
             # the official way to do this is with model.no_sync() context manager, but
